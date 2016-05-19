@@ -1,0 +1,195 @@
+1. create network
+[root@controller ~]# neutron net-create selfservice
+Created a new network:
++-------------------------+--------------------------------------+
+| Field                   | Value                                |
++-------------------------+--------------------------------------+
+| admin_state_up          | True                                 |
+| availability_zone_hints |                                      |
+| availability_zones      |                                      |
+| created_at              | 2016-05-18T05:21:34                  |
+| description             |                                      |
+| id                      | b5f49e1c-9060-4e3c-b229-41e632cc6185 |
+| ipv4_address_scope      |                                      |
+| ipv6_address_scope      |                                      |
+| mtu                     | 1450                                 |
+| name                    | selfservice                          |
+| port_security_enabled   | True                                 |
+| router:external         | False                                |
+| shared                  | False                                |
+| status                  | ACTIVE                               |
+| subnets                 |                                      |
+| tags                    |                                      |
+| tenant_id               | 6792fbe2d2f747059d3519428ee5346a     |
+| updated_at              | 2016-05-18T05:21:34                  |
++-------------------------+--------------------------------------+
+
+
+
+
+ 
+]0;root@controller:~[root@controller ~]# neutron subnet-create --name selfservice \
+>   --dns-nameserver 150.235.207.21 --gateway 172.16.1.1 \
+>   selfservice 172.16.1.0/24
+Created a new subnet:
++-------------------+------------------------------------------------+
+| Field             | Value                                          |
++-------------------+------------------------------------------------+
+| allocation_pools  | {"start": "172.16.1.2", "end": "172.16.1.254"} |
+| cidr              | 172.16.1.0/24                                  |
+| created_at        | 2016-05-18T05:22:53                            |
+| description       |                                                |
+| dns_nameservers   | 150.235.207.21                                 |
+| enable_dhcp       | True                                           |
+| gateway_ip        | 172.16.1.1                                     |
+| host_routes       |                                                |
+| id                | 2ba61cf7-04da-4090-9bb1-972c2356ed82           |
+| ip_version        | 4                                              |
+| ipv6_address_mode |                                                |
+| ipv6_ra_mode      |                                                |
+| name              | selfservice                                    |
+| network_id        | b5f49e1c-9060-4e3c-b229-41e632cc6185           |
+| subnetpool_id     |                                                |
+| tenant_id         | 6792fbe2d2f747059d3519428ee5346a               |
+| updated_at        | 2016-05-18T05:22:53                            |
++-------------------+------------------------------------------------+
+
+
+The provider network must include the router:external option to enable self-service routers to use it
+]0;root@controller:~[root@controller ~]# . admin-openrc
+]0;root@controller:~[root@controller ~]# neutron net-update provider --router:external
+
+
+create router
+]0;root@controller:~[root@controller ~]# . demo-openrc
+]0;root@controller:~[root@controller ~]# neutron router-create router
+Created a new router:
++-------------------------+--------------------------------------+
+| Field                   | Value                                |
++-------------------------+--------------------------------------+
+| admin_state_up          | True                                 |
+| availability_zone_hints |                                      |
+| availability_zones      |                                      |
+| description             |                                      |
+| external_gateway_info   |                                      |
+| id                      | 80b43211-ca62-42cb-8951-9551f7c7ab9d |
+| name                    | router                               |
+| routes                  |                                      |
+| status                  | ACTIVE                               |
+| tenant_id               | 6792fbe2d2f747059d3519428ee5346a     |
++-------------------------+--------------------------------------+
+
+
+add a interface to the router
+]0;root@controller:~[root@controller ~]# neutron router-interface-add router selfservice
+Added interface 0be95f42-d345-4aec-b3ce-e62188585bad to router router.
+
+Set a gateway on the provider network on the router
+]0;root@controller:~[root@controller ~]# neutron router-gateway-set router provider
+Set gateway for router router
+
+List network namespaces
+]0;root@controller:~[root@controller ~]# . admin-openrc
+]0;root@controller:~[root@controller ~]# ip netns
+qrouter-80b43211-ca62-42cb-8951-9551f7c7ab9d (id: 2)
+qdhcp-b5f49e1c-9060-4e3c-b229-41e632cc6185 (id: 1)
+qdhcp-d0c303e4-8ad3-4dc8-8a45-8e2c4834f683 (id: 0)
+
+List ports on the router
+]0;root@controller:~[root@controller ~]# neutron router-port-list router
++--------------------------------------+------+-------------------+----------------------------------------------------------------------------------------+
+| id                                   | name | mac_address       | fixed_ips                                                                              |
++--------------------------------------+------+-------------------+----------------------------------------------------------------------------------------+
+| 0be95f42-d345-4aec-b3ce-e62188585bad |      | fa:16:3e:56:a4:99 | {"subnet_id": "2ba61cf7-04da-4090-9bb1-972c2356ed82", "ip_address": "172.16.1.1"}      |
+| d83f1ba6-05ea-4912-8859-47c5ba65d7f8 |      | fa:16:3e:ae:77:05 | {"subnet_id": "b04f77bd-194c-4695-8d37-46af07ae146e", "ip_address": "192.168.125.155"} |
++--------------------------------------+------+-------------------+----------------------------------------------------------------------------------------+
+
+
+Launch an instance on the self-service network
+
+]0;root@controller:~[root@controller ~]# openstack network list
++--------------------------------------+-------------+--------------------------------------+
+| ID                                   | Name        | Subnets                              |
++--------------------------------------+-------------+--------------------------------------+
+| d0c303e4-8ad3-4dc8-8a45-8e2c4834f683 | provider    | b04f77bd-194c-4695-8d37-46af07ae146e |
+| b5f49e1c-9060-4e3c-b229-41e632cc6185 | selfservice | 2ba61cf7-04da-4090-9bb1-972c2356ed82 |
++--------------------------------------+-------------+--------------------------------------+
+]0;root@controller:~[root@controller ~]# openstack security group list
++--------------------------------------+---------+------------------------+----------------------------------+
+| ID                                   | Name    | Description            | Project                          |
++--------------------------------------+---------+------------------------+----------------------------------+
+| 7619b015-ecd0-47fa-811e-644e555d9123 | default | Default security group | 6792fbe2d2f747059d3519428ee5346a |
++--------------------------------------+---------+------------------------+----------------------------------+
+
+]0;root@controller:~[root@controller ~]# openstack server create --flavor m1.nano --image cirros \
+>   --nic net-id=b5f49e1c-9060-4e3c-b229-41e632cc6185 --security-group default \
+>   --key-name mykey selfservice-instanc
++--------------------------------------+-----------------------------------------------+
+| Field                                | Value                                         |
++--------------------------------------+-----------------------------------------------+
+| OS-DCF:diskConfig                    | MANUAL                                        |
+| OS-EXT-AZ:availability_zone          |                                               |
+| OS-EXT-STS:power_state               | 0                                             |
+| OS-EXT-STS:task_state                | scheduling                                    |
+| OS-EXT-STS:vm_state                  | building                                      |
+| OS-SRV-USG:launched_at               | None                                          |
+| OS-SRV-USG:terminated_at             | None                                          |
+| accessIPv4                           |                                               |
+| accessIPv6                           |                                               |
+| addresses                            |                                               |
+| adminPass                            | DUJe8PDqzyR9                                  |
+| config_drive                         |                                               |
+| created                              | 2016-05-18T05:36:45Z                          |
+| flavor                               | m1.nano (0)                                   |
+| hostId                               |                                               |
+| id                                   | a007f415-367c-4d7c-986e-76fb2db393f6          |
+| image                                | cirros (9516baa3-129b-4fc6-b2d4-04cb9fd56cbb) |
+| key_name                             | mykey                                         |
+| name                                 | selfservice-instanc                           |
+| os-extended-volumes:volumes_attached | []                                            |
+| progress                             | 0                                             |
+| project_id                           | 6792fbe2d2f747059d3519428ee5346a              |
+| properties                           |                                               |
+| security_groups                      | [{u'name': u'default'}]                       |
+| status                               | BUILD                                         |
+| updated                              | 2016-05-18T05:36:46Z                          |
+| user_id                              | 5b279fce545e4ac5a35ef757bdaa383f              |
++--------------------------------------+-----------------------------------------------+
+]0;root@controller:~[root@controller ~]# 
+]0;root@controller:~[root@controller ~]# 
+]0;root@controller:~[root@controller ~]# openstack console url show selfservice-instanc
++-------+---------------------------------------------------------------------------------+
+| Field | Value                                                                           |
++-------+---------------------------------------------------------------------------------+
+| type  | novnc                                                                           |
+| url   | http://controller:6080/vnc_auto.html?token=5824903f-d578-4748-af28-13f920a074d3 |
++-------+---------------------------------------------------------------------------------+
+
+
+
+Create a floating IP address on the provider virtual network
+]0;root@controller:~[root@controller ~]# openstack ip floating create provider
++-------------+--------------------------------------+
+| Field       | Value                                |
++-------------+--------------------------------------+
+| fixed_ip    | None                                 |
+| id          | e711bba2-c1ef-4982-924d-5871da5aeaa0 |
+| instance_id | None                                 |
+| ip          | 192.168.125.156                      |
+| pool        | provider                             |
++-------------+--------------------------------------+
+]0;root@controller:~[root@controller ~]# 192.168.125.156[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K
+]0;root@controller:~[root@controller ~]# 
+
+
+Associate the floating IP address with the instance
+]0;root@controller:~[root@controller ~]# openstack ip floating add 192.168.125.156 selfservice-instanc
+]0;root@controller:~[root@controller ~]# 
+]0;root@controller:~[root@controller ~]# 
+]0;root@controller:~[root@controller ~]# openstack server list
++--------------------------------------+---------------------+--------+-----------------------------------------+
+| ID                                   | Name                | Status | Networks                                |
++--------------------------------------+---------------------+--------+-----------------------------------------+
+| a007f415-367c-4d7c-986e-76fb2db393f6 | selfservice-instanc | ACTIVE | selfservice=172.16.1.3, 192.168.125.156 |
++--------------------------------------+---------------------+--------+-----------------------------------------+
+]0;root@controller:~[root@controller ~]# 
